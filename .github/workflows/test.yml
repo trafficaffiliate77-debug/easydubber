@@ -1,4 +1,4 @@
-name: EasyDubber Video Test
+name: EasyDubber Episode Renderer
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -16,12 +17,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Render video
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install firebase-admin
+
+      - name: Render EasyDubber episode
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           python scripts/render_video.py
 
-      - name: Upload test video
+      - name: Save generated video
         uses: actions/upload-artifact@v4
         with:
-          name: easydubber-video
-          path: output/easydubber_test.mp4
+          name: easydubber-episode
+          path: output/easydubber_episode_01.mp4
