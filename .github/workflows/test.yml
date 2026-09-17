@@ -25,6 +25,12 @@ jobs:
       - name: Test visual generator
         run: |
           python scripts/create_scene_image.py
+
+      - name: Save scene visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: easydubber-scene-visual
+          path: output/images/scene_01.png
     
       - name: Create Tagalog episode
         env:
