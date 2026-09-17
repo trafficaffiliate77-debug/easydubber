@@ -11,19 +11,13 @@ def create_scene_image(scene_number, scene_text):
 
     os.makedirs("output/images", exist_ok=True)
 
-    # Create a deterministic color from the scene text
     digest = hashlib.md5(
         scene_text.encode("utf-8")
     ).hexdigest()
 
-    r = int(digest[0:2], 16)
-    g = int(digest[2:4], 16)
-    b = int(digest[4:6], 16)
-
-    # Make the colors brighter/cinematic
-    r = min(255, r + 60)
-    g = min(255, g + 60)
-    b = min(255, b + 60)
+    r = min(255, int(digest[0:2], 16) + 60)
+    g = min(255, int(digest[2:4], 16) + 60)
+    b = min(255, int(digest[4:6], 16) + 60)
 
     image = Image.new(
         "RGB",
@@ -33,24 +27,24 @@ def create_scene_image(scene_number, scene_text):
 
     draw = ImageDraw.Draw(image)
 
-    # Add large cinematic circles
+    # Cinematic background shapes
     draw.ellipse(
-        (-250, 200, 700, 1150),
+        (-300, 100, 700, 1100),
         fill=(255, 255, 255)
     )
 
     draw.ellipse(
-        (500, 900, 1300, 1900),
-        fill=(30, 30, 30)
+        (450, 850, 1350, 1950),
+        fill=(25, 25, 35)
     )
 
-    # Add a dark transparent-style panel
-    draw.rectangle(
-        (70, 1350, 1010, 1800),
-        fill=(15, 15, 25)
+    # Main cinematic panel
+    draw.rounded_rectangle(
+        (70, 1320, 1010, 1810),
+        radius=35,
+        fill=(10, 10, 20)
     )
 
-    # Font
     font_path = (
         "/usr/share/fonts/truetype/dejavu/"
         "DejaVuSans-Bold.ttf"
@@ -66,71 +60,60 @@ def create_scene_image(scene_number, scene_text):
         42
     )
 
-    # Title
+    small_font = ImageFont.truetype(
+        font_path,
+        34
+    )
+
     draw.text(
-        (80, 90),
+        (80, 80),
         "EASYDUBBER",
         font=title_font,
         fill="white"
     )
 
     draw.text(
-        (80, 180),
+        (80, 175),
         f"SCENE {scene_number}",
-        font=scene_font,
+        font=small_font,
         fill="white"
     )
 
-    # Short visual description
     clean_text = scene_text.replace(
         "\n",
         " "
     )
 
-    if len(clean_text) > 180:
-        clean_text = clean_text[:180] + "..."
+    if len(clean_text) > 220:
+        clean_text = clean_text[:220] + "..."
 
     draw.text(
-        (110, 1450),
+        (110, 1410),
         clean_text,
         font=scene_font,
         fill="white",
-        spacing=15
+        spacing=18
     )
 
-    # Decorative cinematic lines
     draw.line(
-        (80, 1270, 1000, 1270),
+        (80, 1260, 1000, 1260),
         fill="white",
         width=5
     )
 
-    draw.line(
-        (80, 1840, 1000, 1840),
-        fill="white",
-        width=3
+    draw.text(
+        (80, 1840),
+        "COLORFUL CINEMATIC STORY",
+        font=small_font,
+        fill="white"
     )
 
     output_file = (
         f"output/images/scene_{scene_number:02d}.png"
     )
 
-    image.save(
-        output_file,
-        quality=95
-    )
+    image.save(output_file)
 
-    print(
-        "Created visual:",
-        output_file
-    )
+    print("Created:", output_file)
 
     return output_file
-
-
-if __name__ == "__main__":
-
-    create_scene_image(
-        1,
-        "A mysterious young man discovers a glowing black technology core."
-    )
