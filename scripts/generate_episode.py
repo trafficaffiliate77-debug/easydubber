@@ -1,21 +1,32 @@
 import os
 import json
 import firebase_admin
+
 from firebase_admin import credentials, firestore
 
-# Firebase connection
+
+# ==========================================
+# Firebase
+# ==========================================
+
 service_account = json.loads(
     os.environ["FIREBASE_SERVICE_ACCOUNT"]
 )
 
-cred = credentials.Certificate(service_account)
+cred = credentials.Certificate(
+    service_account
+)
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# Find one pending episode
+
+# ==========================================
+# Find pending episode
+# ==========================================
+
 episodes = (
     db.collection("episodes")
     .where("status", "==", "pending")
@@ -31,69 +42,96 @@ for doc in episodes:
     episode_data = doc.to_dict()
     break
 
+
 if episode_doc is None:
-    print("No pending episodes.")
+    print("No pending episode found.")
     exit(0)
 
-title = episode_data.get("title", "Untitled")
-prompt = episode_data.get("prompt", "")
 
-print("================================")
-print("EASYDUBBER EPISODE GENERATOR")
-print("================================")
-print("Title:", title)
-print("Idea:", prompt)
+title = episode_data.get(
+    "title",
+    "EasyDubber Episode"
+)
+
+prompt = episode_data.get(
+    "prompt",
+    ""
+)
+
+
+print("Generating episode:")
+print(title)
 print()
+print("Idea:")
+print(prompt)
 
-# Temporary story generation
+
+# ==========================================
+# Story
+# ==========================================
+
 story = f"""
-EPISODE: {title}
+SCENE 1
+VISUAL: A mysterious young man stands alone outside a futuristic city at night, surrounded by glowing holographic technology.
+NARRATION: Sa isang lungsod na puno ng makabagong teknolohiya, isang misteryosong binata ang tahimik na nakatayo.
 
-STORY IDEA:
-{prompt}
+SCENE 2
+VISUAL: The young man discovers a strange black technological core glowing inside an abandoned laboratory.
+NARRATION: Sa isang lumang laboratoryo, natuklasan niya ang isang kakaibang itim na core na kumikinang.
 
-SCENE 1:
-Opening shot establishes the main character and the mysterious situation.
+SCENE 3
+VISUAL: The black core floats in front of him and projects a giant blue holographic interface.
+NARRATION: Biglang lumutang ang core at nagpakita ng isang napakalaking holographic system.
 
-SCENE 2:
-The main character notices something unusual.
+SCENE 4
+VISUAL: Hundreds of holographic screens surround the young man as mysterious information appears around him.
+NARRATION: Napalibutan siya ng daan-daang holographic screen na naglalaman ng mga lihim na impormasyon.
 
-SCENE 3:
-A mysterious event changes everything.
+SCENE 5
+VISUAL: The young man touches the holographic interface and the entire laboratory begins transforming.
+NARRATION: Nang hawakan niya ang sistema, nagsimulang magbago ang buong laboratoryo.
 
-SCENE 4:
-The main character discovers a hidden secret.
+SCENE 6
+VISUAL: A beautiful mysterious woman appears inside the holographic system and looks directly at him.
+NARRATION: Ngunit isang magandang misteryosang babae ang biglang lumitaw sa loob ng sistema.
 
-SCENE 5:
-A new character appears and creates tension.
+SCENE 7
+VISUAL: The woman warns him about powerful enemies watching from the shadows.
+NARRATION: Binalaan siya ng babae tungkol sa makapangyarihang mga kaaway na nagmamasid mula sa dilim.
 
-SCENE 6:
-The main character faces an unexpected challenge.
+SCENE 8
+VISUAL: The young man looks toward the city as massive holographic towers activate in the distance.
+NARRATION: Tumingin siya sa lungsod habang isa-isang nag-activate ang malalaking holographic tower.
 
-SCENE 7:
-The hidden technology or secret becomes more powerful.
+SCENE 9
+VISUAL: Dark figures watch the glowing city from a hidden control room.
+NARRATION: Samantala, may mga misteryosong tao sa isang lihim na silid na nagmamasid sa kanya.
 
-SCENE 8:
-The main character makes an important decision.
+SCENE 10
+VISUAL: The young man smiles confidently as the black core floats beside him and the city lights up behind him.
+NARRATION: Ngumiti siya at sinabi, "Kung gusto nila akong subukan, handa na ako."
 
-SCENE 9:
-A surprising revelation changes the situation.
-
-SCENE 10:
-CLIFFHANGER:
-Something unexpected appears, leading directly into the next episode.
-
-ENDING CTA:
-Like, follow, and subscribe for the next episode.
+CTA
+VISUAL: The holographic system fills the screen with glowing futuristic symbols.
+NARRATION: Kung gusto mong malaman ang susunod na mangyayari, i-like, i-follow, at mag-subscribe para sa Episode 2.
 """
 
-print(story)
 
-# Save generated story back to Firebase
+# ==========================================
+# Save to Firestore
+# ==========================================
+
 episode_doc.reference.update({
-    "status": "generated",
-    "story": story
+
+    "story": story.strip(),
+
+    "status": "generated"
+
 })
 
+
 print()
-print("Episode generated successfully!")
+print("================================")
+print("EPISODE GENERATED")
+print("================================")
+print(title)
