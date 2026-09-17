@@ -1,4 +1,4 @@
-name: EasyDubber Tagalog Episode
+name: EasyDubber Cinematic Tagalog Episode
 
 on:
   workflow_dispatch:
@@ -22,26 +22,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch transformers soundfile firebase-admin pillow
 
-      - name: Create all scene visuals
+      - name: Create scene visuals
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           python scripts/create_all_scene_images.py
 
-      - name: Save scene visuals
-        uses: actions/upload-artifact@v4
-        with:
-          name: easydubber-scene-visuals
-          path: output/images/
-    
-      - name: Create Tagalog episode
+      - name: Create cinematic Tagalog video
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          python scripts/make_narrated_video.py
+          python scripts/make_visual_narrated_video.py
 
-      - name: Save finished video
+      - name: Save final video
         uses: actions/upload-artifact@v4
         with:
-          name: easydubber-tagalog-episode
-          path: output/easydubber_tagalog_episode.mp4
+          name: easydubber-cinematic-tagalog
+          path: output/easydubber_visual_tagalog_episode.mp4
