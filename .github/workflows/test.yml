@@ -1,27 +1,35 @@
-name: EasyDubber Tagalog TTS Test
+name: EasyDubber Tagalog Episode
 
 on:
   workflow_dispatch:
 
 jobs:
-  tts:
+  video:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Python
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install torch transformers soundfile
+          pip install torch transformers soundfile firebase-admin
 
-      - name: Generate Tagalog voice
+      - name: Create Tagalog episode
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          python scripts/test_tts.py
+          python scripts/make_narrated_video.py
 
-      - name: Save audio
+      - name: Save finished video
         uses: actions/upload-artifact@v4
         with:
-          name: tagalog-voice-test
-          path: tagalog_test.wav
+          name: easydubber-tagalog-episode
+          path: output/easydubber_tagalog_episode.mp4
