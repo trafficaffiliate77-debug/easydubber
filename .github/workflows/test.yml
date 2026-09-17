@@ -1,4 +1,4 @@
-name: EasyDubber Test
+name: EasyDubber Firebase Test
 
 on:
   workflow_dispatch:
@@ -11,5 +11,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run EasyDubber
-        run: python scripts/test.py
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install firebase-admin
+
+      - name: Read Firebase episode queue
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/read_queue.py
