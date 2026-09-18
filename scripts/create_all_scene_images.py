@@ -3,7 +3,6 @@ import json
 import firebase_admin
 
 from firebase_admin import credentials, firestore
-
 from create_scene_image import create_scene_image
 
 
@@ -15,9 +14,7 @@ service_account = json.loads(
     os.environ["FIREBASE_SERVICE_ACCOUNT"]
 )
 
-cred = credentials.Certificate(
-    service_account
-)
+cred = credentials.Certificate(service_account)
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -36,14 +33,16 @@ episodes = (
     .stream()
 )
 
+episode_doc = None
 episode_data = None
 
 for doc in episodes:
+    episode_doc = doc
     episode_data = doc.to_dict()
     break
 
 
-if episode_data is None:
+if episode_doc is None:
     print("No generated episode found.")
     exit(0)
 
@@ -67,28 +66,35 @@ for block in story.split("SCENE ")[1:]:
     if not lines:
         continue
 
-    number = lines[0].split(":")[0].strip()
+    number_text = lines[0].split(":")[0].strip()
 
-    text = "\n".join(
-        lines[1:]
-    ).strip()
+    try:
+        number = int(number_text)
+    except ValueError:
+        continue
 
-    if text:
+    visual = ""
 
+    for line in lines:
+
+        if line.startswith("VISUAL:"):
+            visual = line.replace(
+                "VISUAL:",
+                "",
+                1
+            ).strip()
+
+    if visual:
         scenes.append(
-            (
-                number,
-                text
-            )
+            (number, visual)
         )
 
 
 scenes = scenes[:10]
 
 print(
-    "Creating",
-    len(scenes),
-    "scene visuals..."
+    "Visual scenes found:",
+    len(scenes)
 )
 
 
@@ -96,15 +102,18 @@ print(
 # Generate images
 # ==========================================
 
-for number, text in scenes:
+for number, visual in scenes:
+
+    print()
+    print("Creating visual for scene", number)
 
     create_scene_image(
-        int(number),
-        text
+        number,
+        visual
     )
 
 
 print()
 print("================================")
-print("ALL SCENE IMAGES CREATED")
+print("VISUAL GENERATION COMPLETE")
 print("================================")
