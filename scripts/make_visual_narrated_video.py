@@ -36,23 +36,35 @@ episodes = (
     .stream()
 )
 
+episode_doc = None
 episode_data = None
 
 for doc in episodes:
+    episode_doc = doc
     episode_data = doc.to_dict()
     break
 
-if episode_data is None:
+
+if episode_doc is None:
     print("No generated episode found.")
     exit(0)
 
-story = episode_data.get("story", "")
 
-print("Episode loaded.")
+story = episode_data.get(
+    "story",
+    ""
+)
+
+title = episode_data.get(
+    "title",
+    "EasyDubber Episode"
+)
+
+print("Episode:", title)
 
 
 # ==========================================
-# Extract scenes
+# Extract narration
 # ==========================================
 
 scenes = []
@@ -64,20 +76,38 @@ for block in story.split("SCENE ")[1:]:
     if not lines:
         continue
 
-    number = lines[0].split(":")[0].strip()
+    number_text = lines[0].split(":")[0].strip()
 
-    text = "\n".join(
-        lines[1:]
-    ).strip()
+    try:
+        number = int(number_text)
+    except ValueError:
+        continue
 
-    if text:
+    narration = ""
+
+    for line in lines:
+
+        if line.startswith("NARRATION:"):
+
+            narration = line.replace(
+                "NARRATION:",
+                "",
+                1
+            ).strip()
+
+    if narration:
+
         scenes.append(
-            (int(number), text)
+            (number, narration)
         )
+
 
 scenes = scenes[:10]
 
-print("Scenes:", len(scenes))
+print(
+    "Narration scenes found:",
+    len(scenes)
+)
 
 
 # ==========================================
@@ -121,33 +151,25 @@ scene_files = []
 # Process scenes
 # ==========================================
 
-for index, (number, text) in enumerate(scenes):
+for number, narration in scenes:
 
     print()
     print("================================")
     print("SCENE", number)
     print("================================")
 
-    image_file = (
-        f"output/images/scene_{number:02d}.png"
+    print(
+        "Narration:",
+        narration
     )
-
-    if not os.path.exists(image_file):
-
-        print(
-            "Missing image:",
-            image_file
-        )
-
-        continue
 
 
     # ======================================
-    # Generate narration
+    # TTS
     # ======================================
 
     inputs = tokenizer(
-        text,
+        narration,
         return_tensors="pt"
     )
 
@@ -165,7 +187,8 @@ for index, (number, text) in enumerate(scenes):
     )
 
     audio_file = (
-        f"output/audio/audio_{number:02d}.wav"
+        f"output/audio/"
+        f"audio_{number:02d}.wav"
     )
 
     sf.write(
@@ -176,7 +199,7 @@ for index, (number, text) in enumerate(scenes):
 
 
     # ======================================
-    # Get narration duration
+    # Get duration
     # ======================================
 
     probe = subprocess.run(
@@ -203,7 +226,26 @@ for index, (number, text) in enumerate(scenes):
 
 
     # ======================================
-    # Create cinematic image video
+    # Image
+    # ======================================
+
+    image_file = (
+        f"output/images/"
+        f"scene_{number:02d}.png"
+    )
+
+    if not os.path.exists(image_file):
+
+        print(
+            "Missing image:",
+            image_file
+        )
+
+        continue
+
+
+    # ======================================
+    # Cinematic movement
     # ======================================
 
     video_file = (
@@ -211,7 +253,6 @@ for index, (number, text) in enumerate(scenes):
         f"scene_{number:02d}.mp4"
     )
 
-    # Slow zoom effect
     zoom_filter = (
         "scale=1200:2133,"
         "zoompan="
@@ -225,7 +266,9 @@ for index, (number, text) in enumerate(scenes):
         + str(duration)
     )
 
+
     command = [
+
         "ffmpeg",
         "-y",
 
@@ -273,23 +316,25 @@ for index, (number, text) in enumerate(scenes):
         video_file
     ]
 
+
     subprocess.run(
         command,
         check=True
     )
 
+
     scene_files.append(
         video_file
     )
 
+
     print(
-        "Scene video created:",
-        video_file
+        "Scene video created."
     )
 
 
 # ==========================================
-# Create concat list
+# Concat
 # ==========================================
 
 concat_file = (
@@ -311,7 +356,7 @@ with open(
 
 
 # ==========================================
-# Combine all scenes
+# Final video
 # ==========================================
 
 final_video = (
@@ -344,6 +389,6 @@ subprocess.run(
 
 print()
 print("========================================")
-print("EASYDUBBER CINEMATIC VIDEO COMPLETE")
+print("EASYDUBBER TAGALOG VIDEO COMPLETE")
 print("========================================")
 print(final_video)
