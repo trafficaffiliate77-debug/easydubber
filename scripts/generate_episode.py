@@ -13,9 +13,7 @@ service_account = json.loads(
     os.environ["FIREBASE_SERVICE_ACCOUNT"]
 )
 
-cred = credentials.Certificate(
-    service_account
-)
+cred = credentials.Certificate(service_account)
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -55,83 +53,81 @@ title = episode_data.get(
 
 prompt = episode_data.get(
     "prompt",
-    ""
+    "A mysterious futuristic adventure."
 )
 
 
-print("Generating episode:")
-print(title)
-print()
-print("Idea:")
-print(prompt)
+print("================================")
+print("EASYDUBBER STORY GENERATOR")
+print("================================")
+print("Title:", title)
+print("Idea:", prompt)
 
 
 # ==========================================
-# Story
+# Story structure
 # ==========================================
 
 story = f"""
 SCENE 1
-VISUAL: A mysterious young man stands alone outside a futuristic city at night, surrounded by glowing holographic technology.
-NARRATION: Sa isang lungsod na puno ng makabagong teknolohiya, isang misteryosong binata ang tahimik na nakatayo.
+VISUAL: Opening shot based on this story idea: {prompt}. Establish the main character, location, atmosphere, and mystery.
+NARRATION: Sa simula ng kuwentong ito, isang misteryosong pangyayari ang magbabago sa buhay ng pangunahing tauhan.
 
 SCENE 2
-VISUAL: The young man discovers a strange black technological core glowing inside an abandoned laboratory.
-NARRATION: Sa isang lumang laboratoryo, natuklasan niya ang isang kakaibang itim na core na kumikinang.
+VISUAL: The main character discovers something unusual connected to the story idea: {prompt}. Show a strong visual mystery.
+NARRATION: Hindi niya alam kung ano ang tunay na kahulugan ng kanyang natuklasan, ngunit alam niyang may malaking panganib na paparating.
 
 SCENE 3
-VISUAL: The black core floats in front of him and projects a giant blue holographic interface.
-NARRATION: Biglang lumutang ang core at nagpakita ng isang napakalaking holographic system.
+VISUAL: A powerful futuristic or mysterious event happens. The main character reacts with surprise while the environment changes dramatically.
+NARRATION: Biglang nagbago ang lahat. Isang kakaibang pangyayari ang nagpakita ng kapangyarihang hindi niya kailanman nakita.
 
 SCENE 4
-VISUAL: Hundreds of holographic screens surround the young man as mysterious information appears around him.
-NARRATION: Napalibutan siya ng daan-daang holographic screen na naglalaman ng mga lihim na impormasyon.
+VISUAL: The main character investigates the mystery. Show close-up expressions, dramatic lighting, and important clues.
+NARRATION: Sinimulan niyang hanapin ang katotohanan habang unti-unting lumalabas ang mga lihim.
 
 SCENE 5
-VISUAL: The young man touches the holographic interface and the entire laboratory begins transforming.
-NARRATION: Nang hawakan niya ang sistema, nagsimulang magbago ang buong laboratoryo.
+VISUAL: Introduce an important supporting character connected to the main mystery. Create emotional tension between the characters.
+NARRATION: Ngunit hindi siya nag-iisa. May isang taong biglang dumating na tila alam ang higit pa sa kanyang nalalaman.
 
 SCENE 6
-VISUAL: A beautiful mysterious woman appears inside the holographic system and looks directly at him.
-NARRATION: Ngunit isang magandang misteryosang babae ang biglang lumitaw sa loob ng sistema.
+VISUAL: The main character and the supporting character face an unexpected threat together.
+NARRATION: Bago pa nila maintindihan ang buong sitwasyon, dumating ang isang hindi inaasahang banta.
 
 SCENE 7
-VISUAL: The woman warns him about powerful enemies watching from the shadows.
-NARRATION: Binalaan siya ng babae tungkol sa makapangyarihang mga kaaway na nagmamasid mula sa dilim.
+VISUAL: Reveal a major secret connected to the original story idea. Use dramatic cinematic lighting and a powerful visual reveal.
+NARRATION: At doon niya nalaman ang isang lihim na maaaring magbago sa buong mundo.
 
 SCENE 8
-VISUAL: The young man looks toward the city as massive holographic towers activate in the distance.
-NARRATION: Tumingin siya sa lungsod habang isa-isang nag-activate ang malalaking holographic tower.
+VISUAL: The main character activates a new ability, technology, weapon, or mysterious power related to the story.
+NARRATION: Sa unang pagkakataon, ginamit niya ang kapangyarihang matagal nang nakatago sa kanyang harapan.
 
 SCENE 9
-VISUAL: Dark figures watch the glowing city from a hidden control room.
-NARRATION: Samantala, may mga misteryosong tao sa isang lihim na silid na nagmamasid sa kanya.
+VISUAL: Powerful enemies appear in the distance while the main character prepares for the coming confrontation.
+NARRATION: Ngunit may mas makapangyarihang mga kalaban na naghihintay. At ngayon, wala nang atrasan.
 
 SCENE 10
-VISUAL: The young man smiles confidently as the black core floats beside him and the city lights up behind him.
-NARRATION: Ngumiti siya at sinabi, "Kung gusto nila akong subukan, handa na ako."
+VISUAL: End with a dramatic cliffhanger based on the story idea: {prompt}. The main character faces an unknown future.
+NARRATION: Hindi pa tapos ang laban. Sa susunod na kabanata, malalaman natin kung ano ang tunay na kapangyarihan sa likod ng misteryong ito.
 
 CTA
-VISUAL: The holographic system fills the screen with glowing futuristic symbols.
-NARRATION: Kung gusto mong malaman ang susunod na mangyayari, i-like, i-follow, at mag-subscribe para sa Episode 2.
+VISUAL: Dramatic colorful cinematic ending with glowing particles and the title appearing on screen.
+NARRATION: Kung gusto mong makita ang susunod na episode, i-like, i-follow, at mag-subscribe para hindi mo ito mapalampas.
 """
 
 
 # ==========================================
-# Save to Firestore
+# Save
 # ==========================================
 
 episode_doc.reference.update({
-
     "story": story.strip(),
-
     "status": "generated"
-
 })
 
 
 print()
 print("================================")
-print("EPISODE GENERATED")
+print("EPISODE GENERATED SUCCESSFULLY")
 print("================================")
-print(title)
+print("Title:", title)
+print("Status: generated")
