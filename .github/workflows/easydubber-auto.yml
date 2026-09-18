@@ -1,0 +1,42 @@
+name: EasyDubber Auto Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch transformers soundfile firebase-admin pillow
+
+      - name: Generate Story
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/generate_episode.py
+
+      - name: Create Scene Images
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/create_all_scene_images.py
+
+      - name: Create Cinematic Video
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/make_visual_narrated_video.py
+
+      - name: Upload MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: easydubber-final-video
+          path: output/easydubber_visual_tagalog_episode.mp4
