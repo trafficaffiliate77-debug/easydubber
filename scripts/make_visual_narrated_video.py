@@ -1,8 +1,8 @@
 import os
 import re
 import subprocess
-import tempfile
 import shutil
+import json
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -13,27 +13,32 @@ from transformers import AutoTokenizer, VitsModel
 
 
 # ============================================================
-# EASYDUBBER — CINEMATIC TAGALOG VIDEO V2
+# EASYDUBBER — CINEMATIC TAGALOG VIDEO V3
 # ============================================================
 #
 # Features:
-# - Reads NARRATION: lines from Firestore
-# - Uses scene_01.png ... scene_10.png
+# - Supports ANY number of scenes
+# - Matches Scene 1 -> scene_01.png
+# - Matches Scene 11 -> scene_11.png
+# - Reads NARRATION from Firestore
 # - Generates Tagalog TTS
-# - Creates one independent video clip per scene
+# - One independent video clip per scene
 # - Slow cinematic zoom
-# - Each image stays on screen for its narration
-# - Uses FFmpeg concat FILTER instead of stream-copy concat
-# - Prevents the "one image for whole video" problem
-# - 1080x1920 vertical video
+# - No image skipping
+# - No hard 10-scene limit
+# - No stream-copy concatenation
 # - H.264 + AAC
+# - 1080x1920 vertical video
 #
 # Output:
 # output/easydubber_visual_tagalog_episode.mp4
 # ============================================================
 
 
-OUTPUT_VIDEO = "output/easydubber_visual_tagalog_episode.mp4"
+OUTPUT_VIDEO = (
+    "output/easydubber_visual_tagalog_episode.mp4"
+)
+
 IMAGE_DIR = "output/images"
 AUDIO_DIR = "output/audio"
 SCENE_DIR = "output/scene_clips"
@@ -43,11 +48,8 @@ SAMPLE_RATE = 16000
 
 WIDTH = 1080
 HEIGHT = 1920
-
 FPS = 30
 
-# Small padding at the end of each narration.
-# This helps avoid cutting the final word.
 END_PADDING = 0.20
 
 
@@ -56,20 +58,27 @@ END_PADDING = 0.20
 # ============================================================
 
 if not firebase_admin._apps:
-    service_account_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+
+    service_account_json = os.environ.get(
+        "FIREBASE_SERVICE_ACCOUNT"
+    )
 
     if not service_account_json:
         raise RuntimeError(
             "FIREBASE_SERVICE_ACCOUNT environment variable is missing."
         )
 
-    import json
+    service_account_info = json.loads(
+        service_account_json
+    )
 
-    service_account_info = json.loads(service_account_json)
+    cred = credentials.Certificate(
+        service_account_info
+    )
 
-    cred = credentials.Certificate(service_account_info)
-
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(
+        cred
+    )
 
 
 db = firestore.client()
@@ -80,6 +89,7 @@ db = firestore.client()
 # ============================================================
 
 def run_command(command):
+
     print()
     print("Running:")
     print(" ".join(command))
@@ -95,14 +105,17 @@ def run_command(command):
     print(result.stdout)
 
     if result.returncode != 0:
+
         raise RuntimeError(
-            f"Command failed with exit code {result.returncode}"
+            "Command failed with exit code "
+            + str(result.returncode)
         )
 
     return result.stdout
 
 
 def get_audio_duration(path):
+
     result = subprocess.run(
         [
             "ffprobe",
@@ -120,16 +133,20 @@ def get_audio_duration(path):
     )
 
     if result.returncode != 0:
+
         raise RuntimeError(
             f"Could not read audio duration: {path}"
         )
 
-    return float(result.stdout.strip())
+    value = result.stdout.strip()
 
+    if not value:
 
-def safe_filename(text):
-    text = re.sub(r"[^a-zA-Z0-9_-]+", "_", text)
-    return text[:100]
+        raise RuntimeError(
+            f"FFprobe returned no duration for: {path}"
+        )
+
+    return float(value)
 
 
 # ============================================================
@@ -138,9 +155,10 @@ def safe_filename(text):
 
 print()
 print("========================================")
-print("EASYDUBBER CINEMATIC VIDEO V2")
+print("EASYDUBBER CINEMATIC VIDEO V3")
 print("========================================")
 print()
+
 
 episodes = (
     db.collection("episodes")
@@ -152,11 +170,13 @@ episodes = (
 episode_doc = None
 
 for doc in episodes:
+
     episode_doc = doc
     break
 
 
 if episode_doc is None:
+
     raise RuntimeError(
         "No generated episode found in Firestore."
     )
@@ -164,17 +184,46 @@ if episode_doc is None:
 
 episode = episode_doc.to_dict()
 
-title = episode.get("title", "EasyDubber Episode")
+title = episode.get(
+    "title",
+    "EasyDubber Episode"
+)
 
-story = episode.get("story", "")
+story = episode.get(
+    "story",
+    ""
+)
 
 
 print("Episode:", title)
 print()
 
 
+if not story.strip():
+
+    raise RuntimeError(
+        "Episode story is empty."
+    )
+
+
 # ============================================================
-# PARSE NARRATION LINES
+# PARSE SCENES
+# ============================================================
+#
+# Expected format:
+#
+# SCENE 1
+# VISUAL: ...
+# NARRATION: ...
+#
+# SCENE 2
+# VISUAL: ...
+# NARRATION: ...
+#
+# SCENE 11
+# VISUAL: ...
+# NARRATION: ...
+#
 # ============================================================
 
 blocks = re.split(
@@ -182,58 +231,113 @@ blocks = re.split(
     story.strip()
 )
 
-narrations = []
+scenes = []
 
 
 for block in blocks:
 
-    match = re.search(
+    scene_match = re.search(
+        r"^\s*SCENE\s+(\d+)",
+        block,
+        re.IGNORECASE
+    )
+
+    narration_match = re.search(
         r"NARRATION:\s*(.+)",
         block,
         re.IGNORECASE
     )
 
-    if not match:
+    if not scene_match:
         continue
 
-    narration = match.group(1).strip()
+    if not narration_match:
+        print(
+            "Warning: Scene has no NARRATION:",
+            scene_match.group(1)
+        )
+        continue
 
-    if narration:
-        narrations.append(narration)
+    scene_number = int(
+        scene_match.group(1)
+    )
+
+    narration = narration_match.group(1).strip()
+
+    if not narration:
+        continue
+
+    scenes.append(
+        {
+            "number": scene_number,
+            "narration": narration
+        }
+    )
 
 
-print("Narration scenes found:", len(narrations))
+# ============================================================
+# SORT SCENES
+# ============================================================
+
+scenes.sort(
+    key=lambda item: item["number"]
+)
+
+
+print(
+    "Narration scenes found:",
+    len(scenes)
+)
+
 print()
 
 
-if len(narrations) == 0:
+if not scenes:
+
     raise RuntimeError(
-        "No NARRATION lines were found in the episode story."
+        "No valid scenes with NARRATION were found."
     )
 
 
 # ============================================================
-# CHECK SCENE IMAGES
+# CHECK IMAGE FOR EVERY SCENE
 # ============================================================
 
-visuals = []
+print()
+print("========================================")
+print("CHECKING SCENE IMAGES")
+print("========================================")
+print()
 
-for index in range(1, len(narrations) + 1):
+
+for scene in scenes:
+
+    number = scene["number"]
 
     image_path = os.path.join(
         IMAGE_DIR,
-        f"scene_{index:02d}.png"
+        f"scene_{number:02d}.png"
     )
 
-    if os.path.exists(image_path):
-        visuals.append(image_path)
-    else:
-        print(
-            f"Warning: Missing image for scene {index}"
+    print(
+        f"Scene {number}:",
+        image_path
+    )
+
+    if not os.path.isfile(image_path):
+
+        raise RuntimeError(
+            f"Missing scene image for Scene {number}: "
+            f"{image_path}"
         )
 
+    scene["image"] = image_path
 
-print("Scene images found:", len(visuals))
+
+print()
+print(
+    "All required scene images are present."
+)
 print()
 
 
@@ -241,23 +345,50 @@ print()
 # PREPARE DIRECTORIES
 # ============================================================
 
-os.makedirs("output", exist_ok=True)
-os.makedirs(IMAGE_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(
+    "output",
+    exist_ok=True
+)
+
+os.makedirs(
+    IMAGE_DIR,
+    exist_ok=True
+)
+
+os.makedirs(
+    AUDIO_DIR,
+    exist_ok=True
+)
+
 
 if os.path.exists(SCENE_DIR):
-    shutil.rmtree(SCENE_DIR)
 
-os.makedirs(SCENE_DIR)
+    shutil.rmtree(
+        SCENE_DIR
+    )
+
+
+os.makedirs(
+    SCENE_DIR
+)
 
 
 # ============================================================
 # LOAD TAGALOG TTS
 # ============================================================
 
-print("Loading Tagalog TTS...")
+print()
+print("========================================")
+print("LOADING TAGALOG TTS")
+print("========================================")
+print()
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
+)
+
 
 tokenizer = AutoTokenizer.from_pretrained(
     MODEL_NAME
@@ -271,34 +402,52 @@ model = model.to(device)
 
 model.eval()
 
+
 print()
 print("Tagalog TTS loaded.")
 print()
 
 
 # ============================================================
-# GENERATE EACH SCENE
+# GENERATE SCENE CLIPS
 # ============================================================
 
 scene_clips = []
 
-for index, narration in enumerate(narrations, start=1):
 
+for scene in scenes:
+
+    number = scene["number"]
+    narration = scene["narration"]
+    image_path = scene["image"]
+
+    print()
     print("================================")
-    print(f"SCENE {index}")
+    print(f"SCENE {number}")
     print("================================")
     print()
 
-    print("Narration:", narration)
+    print(
+        "Image:",
+        image_path
+    )
+
+    print()
+
+    print(
+        "Narration:",
+        narration
+    )
+
     print()
 
     # --------------------------------------------------------
-    # AUDIO
+    # GENERATE AUDIO
     # --------------------------------------------------------
 
     audio_path = os.path.join(
         AUDIO_DIR,
-        f"audio_{index:02d}.wav"
+        f"audio_{number:02d}.wav"
     )
 
     inputs = tokenizer(
@@ -313,14 +462,23 @@ for index, narration in enumerate(narrations, start=1):
 
     with torch.no_grad():
 
-        output = model(**inputs)
+        output = model(
+            **inputs
+        )
 
     waveform = output.waveform
 
-    waveform = waveform.detach().cpu().numpy()
+    waveform = (
+        waveform
+        .detach()
+        .cpu()
+        .numpy()
+    )
 
     if waveform.ndim > 1:
+
         waveform = waveform.squeeze()
+
 
     sf.write(
         audio_path,
@@ -328,44 +486,42 @@ for index, narration in enumerate(narrations, start=1):
         SAMPLE_RATE
     )
 
+
     # --------------------------------------------------------
     # AUDIO DURATION
     # --------------------------------------------------------
 
-    duration = get_audio_duration(audio_path)
-
-    duration += END_PADDING
-
-    print(
-        f"Audio duration: {duration:.2f}s"
+    audio_duration = get_audio_duration(
+        audio_path
     )
 
-    # --------------------------------------------------------
-    # IMAGE
-    # --------------------------------------------------------
+    duration = (
+        audio_duration
+        + END_PADDING
+    )
 
-    image_path = visuals[index - 1]
+
+    print(
+        f"Audio duration: {audio_duration:.2f}s"
+    )
+
+    print(
+        f"Scene duration: {duration:.2f}s"
+    )
+
 
     # --------------------------------------------------------
-    # SCENE VIDEO
+    # CREATE VIDEO CLIP
     # --------------------------------------------------------
 
     clip_path = os.path.join(
         SCENE_DIR,
-        f"scene_{index:02d}.mp4"
+        f"scene_{number:02d}.mp4"
     )
+
 
     # --------------------------------------------------------
     # CINEMATIC ZOOM
-    #
-    # Each scene gets its own independent video stream.
-    #
-    # zoompan:
-    # - starts around 1.00x
-    # - slowly moves toward 1.08x
-    #
-    # The image itself is never replaced by another image
-    # inside this clip.
     # --------------------------------------------------------
 
     frames = max(
@@ -373,9 +529,11 @@ for index, narration in enumerate(narrations, start=1):
         int(duration * FPS)
     )
 
+
     zoom_expression = (
         "min(zoom+0.0008,1.08)"
     )
+
 
     vf = (
         f"scale={WIDTH}:{HEIGHT}:"
@@ -390,7 +548,9 @@ for index, narration in enumerate(narrations, start=1):
         f"fps={FPS}"
     )
 
+
     command = [
+
         "ffmpeg",
         "-y",
 
@@ -450,42 +610,70 @@ for index, narration in enumerate(narrations, start=1):
         clip_path
     ]
 
-    run_command(command)
 
-    if not os.path.exists(clip_path):
+    run_command(
+        command
+    )
+
+
+    if not os.path.isfile(
+        clip_path
+    ):
+
         raise RuntimeError(
             f"Scene clip was not created: {clip_path}"
         )
 
-    scene_clips.append(clip_path)
 
-    print()
-    print("Scene video created.")
-    print()
-
-
-# ============================================================
-# CONCATENATE SCENES
-# ============================================================
-
-print()
-print("========================================")
-print("COMBINING ALL SCENES")
-print("========================================")
-print()
-
-
-if not scene_clips:
-    raise RuntimeError(
-        "No scene clips were generated."
+    scene_clips.append(
+        clip_path
     )
 
 
-# Create concat list.
+    print()
+    print(
+        f"Scene {number} video created."
+    )
+    print()
+
+
+# ============================================================
+# VERIFY CLIPS
+# ============================================================
+
+print()
+print("========================================")
+print("VERIFYING SCENE CLIPS")
+print("========================================")
+print()
+
+
+for clip in scene_clips:
+
+    if not os.path.isfile(clip):
+
+        raise RuntimeError(
+            f"Missing scene clip: {clip}"
+        )
+
+    print(
+        "OK:",
+        clip
+    )
+
+
+print()
+
+
+# ============================================================
+# CREATE CONCAT FILE
+# ============================================================
+
 concat_file = os.path.join(
     SCENE_DIR,
     "concat.txt"
 )
+
 
 with open(
     concat_file,
@@ -499,10 +687,14 @@ with open(
             clip
         )
 
-        # FFmpeg concat demuxer requires escaped paths.
-        escaped = absolute_path.replace(
-            "'",
-            "'\\''"
+        absolute_path = (
+            absolute_path
+            .replace("\\", "/")
+        )
+
+        escaped = (
+            absolute_path
+            .replace("'", "'\\''")
         )
 
         f.write(
@@ -510,22 +702,41 @@ with open(
         )
 
 
-# ------------------------------------------------------------
+print()
+print(
+    "Concat file created:"
+)
+print(
+    concat_file
+)
+print()
+
+
+# ============================================================
+# COMBINE ALL SCENES
+# ============================================================
+#
 # IMPORTANT:
 #
-# We DO NOT use:
+# We intentionally DO NOT use:
 #
 # -c copy
 #
-# because that caused the timestamp warnings.
+# We re-encode the final video so every scene's
+# video frames are preserved correctly.
 #
-# Instead we decode/re-encode the combined stream.
-#
-# Every scene therefore keeps its own video frames.
-# ------------------------------------------------------------
+# ============================================================
+
+print()
+print("========================================")
+print("COMBINING ALL SCENES")
+print("========================================")
+print()
+
 
 run_command(
     [
+
         "ffmpeg",
         "-y",
 
@@ -574,15 +785,8 @@ run_command(
 
 
 # ============================================================
-# VERIFY OUTPUT
+# VERIFY FINAL VIDEO
 # ============================================================
-
-if not os.path.exists(OUTPUT_VIDEO):
-
-    raise RuntimeError(
-        "Final video was not created."
-    )
-
 
 print()
 print("========================================")
@@ -591,9 +795,20 @@ print("========================================")
 print()
 
 
+if not os.path.isfile(
+    OUTPUT_VIDEO
+):
+
+    raise RuntimeError(
+        "Final video was not created."
+    )
+
+
 probe = subprocess.run(
     [
+
         "ffprobe",
+
         "-v",
         "error",
 
@@ -604,6 +819,7 @@ probe = subprocess.run(
         "json",
 
         OUTPUT_VIDEO
+
     ],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
@@ -611,13 +827,81 @@ probe = subprocess.run(
 )
 
 
-print(probe.stdout)
-
-
 if probe.returncode != 0:
+
+    print(
+        probe.stderr
+    )
+
     raise RuntimeError(
         "Final video verification failed."
     )
+
+
+print(
+    probe.stdout
+)
+
+
+# ============================================================
+# CHECK VIDEO + AUDIO
+# ============================================================
+
+try:
+
+    probe_data = json.loads(
+        probe.stdout
+    )
+
+except json.JSONDecodeError:
+
+    raise RuntimeError(
+        "Could not read FFprobe JSON."
+    )
+
+
+streams = probe_data.get(
+    "streams",
+    []
+)
+
+
+has_video = any(
+    stream.get("codec_type") == "video"
+    for stream in streams
+)
+
+
+has_audio = any(
+    stream.get("codec_type") == "audio"
+    for stream in streams
+)
+
+
+if not has_video:
+
+    raise RuntimeError(
+        "Final video does not contain a video stream."
+    )
+
+
+if not has_audio:
+
+    raise RuntimeError(
+        "Final video does not contain an audio stream."
+    )
+
+
+print()
+print(
+    "Video stream: OK"
+)
+
+print(
+    "Audio stream: OK"
+)
+
+print()
 
 
 # ============================================================
@@ -641,11 +925,29 @@ print("========================================")
 print("EASYDUBBER TAGALOG VIDEO COMPLETE")
 print("========================================")
 print()
-print(OUTPUT_VIDEO)
+
+print(
+    "Output:",
+    OUTPUT_VIDEO
+)
+
+print(
+    "Scenes:",
+    len(scene_clips)
+)
+
+print(
+    "Resolution:",
+    f"{WIDTH}x{HEIGHT}"
+)
+
+print(
+    "FPS:",
+    FPS
+)
+
 print()
-print("Scenes:", len(scene_clips))
-print("Resolution:", f"{WIDTH}x{HEIGHT}")
-print("FPS:", FPS)
-print()
-print("Video + Audio successfully combined.")
+print(
+    "Video + Audio successfully combined."
+)
 print()
