@@ -1,8 +1,8 @@
 import os
 import re
-import subprocess
-import shutil
 import json
+import shutil
+import subprocess
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -13,43 +13,20 @@ from transformers import AutoTokenizer, VitsModel
 
 
 # ============================================================
-# EASYDUBBER — CINEMATIC TAGALOG VIDEO V3
-# ============================================================
-#
-# Features:
-# - Supports ANY number of scenes
-# - Matches Scene 1 -> scene_01.png
-# - Matches Scene 11 -> scene_11.png
-# - Reads NARRATION from Firestore
-# - Generates Tagalog TTS
-# - One independent video clip per scene
-# - Slow cinematic zoom
-# - No image skipping
-# - No hard 10-scene limit
-# - No stream-copy concatenation
-# - H.264 + AAC
-# - 1080x1920 vertical video
-#
-# Output:
-# output/easydubber_visual_tagalog_episode.mp4
+# EASYDUBBER — FINAL SCENE RENDERER
 # ============================================================
 
-
-OUTPUT_VIDEO = (
-    "output/easydubber_visual_tagalog_episode.mp4"
-)
-
+OUTPUT_VIDEO = "output/easydubber_visual_tagalog_episode.mp4"
 IMAGE_DIR = "output/images"
 AUDIO_DIR = "output/audio"
 SCENE_DIR = "output/scene_clips"
 
 MODEL_NAME = "facebook/mms-tts-tgl"
-SAMPLE_RATE = 16000
 
+SAMPLE_RATE = 16000
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
-
 END_PADDING = 0.20
 
 
@@ -58,40 +35,31 @@ END_PADDING = 0.20
 # ============================================================
 
 if not firebase_admin._apps:
-
-    service_account_json = os.environ.get(
-        "FIREBASE_SERVICE_ACCOUNT"
-    )
+    service_account_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
     if not service_account_json:
         raise RuntimeError(
             "FIREBASE_SERVICE_ACCOUNT environment variable is missing."
         )
 
-    service_account_info = json.loads(
-        service_account_json
-    )
+    service_account_info = json.loads(service_account_json)
 
-    cred = credentials.Certificate(
-        service_account_info
-    )
+    cred = credentials.Certificate(service_account_info)
 
-    firebase_admin.initialize_app(
-        cred
-    )
+    firebase_admin.initialize_app(cred)
 
 
 db = firestore.client()
 
 
 # ============================================================
-# HELPERS
+# COMMAND RUNNER
 # ============================================================
 
 def run_command(command):
 
     print()
-    print("Running:")
+    print("RUNNING:")
     print(" ".join(command))
     print()
 
@@ -105,7 +73,6 @@ def run_command(command):
     print(result.stdout)
 
     if result.returncode != 0:
-
         raise RuntimeError(
             "Command failed with exit code "
             + str(result.returncode)
@@ -113,6 +80,10 @@ def run_command(command):
 
     return result.stdout
 
+
+# ============================================================
+# AUDIO DURATION
+# ============================================================
 
 def get_audio_duration(path):
 
@@ -133,17 +104,15 @@ def get_audio_duration(path):
     )
 
     if result.returncode != 0:
-
         raise RuntimeError(
-            f"Could not read audio duration: {path}"
+            "Could not read audio duration: " + path
         )
 
     value = result.stdout.strip()
 
     if not value:
-
         raise RuntimeError(
-            f"FFprobe returned no duration for: {path}"
+            "FFprobe returned no duration: " + path
         )
 
     return float(value)
@@ -154,9 +123,9 @@ def get_audio_duration(path):
 # ============================================================
 
 print()
-print("========================================")
-print("EASYDUBBER CINEMATIC VIDEO V3")
-print("========================================")
+print("==============================================")
+print("EASYDUBBER FINAL SCENE RENDERER")
+print("==============================================")
 print()
 
 
@@ -167,16 +136,15 @@ episodes = (
     .stream()
 )
 
+
 episode_doc = None
 
 for doc in episodes:
-
     episode_doc = doc
     break
 
 
 if episode_doc is None:
-
     raise RuntimeError(
         "No generated episode found in Firestore."
     )
@@ -200,7 +168,6 @@ print()
 
 
 if not story.strip():
-
     raise RuntimeError(
         "Episode story is empty."
     )
@@ -209,27 +176,12 @@ if not story.strip():
 # ============================================================
 # PARSE SCENES
 # ============================================================
-#
-# Expected format:
-#
-# SCENE 1
-# VISUAL: ...
-# NARRATION: ...
-#
-# SCENE 2
-# VISUAL: ...
-# NARRATION: ...
-#
-# SCENE 11
-# VISUAL: ...
-# NARRATION: ...
-#
-# ============================================================
 
 blocks = re.split(
     r"\n\s*\n",
     story.strip()
 )
+
 
 scenes = []
 
@@ -253,12 +205,12 @@ for block in blocks:
 
     if not narration_match:
         print(
-            "Warning: Scene has no NARRATION:",
+            "WARNING: Scene has no narration:",
             scene_match.group(1)
         )
         continue
 
-    scene_number = int(
+    number = int(
         scene_match.group(1)
     )
 
@@ -269,44 +221,37 @@ for block in blocks:
 
     scenes.append(
         {
-            "number": scene_number,
+            "number": number,
             "narration": narration
         }
     )
 
 
-# ============================================================
-# SORT SCENES
-# ============================================================
-
 scenes.sort(
-    key=lambda item: item["number"]
+    key=lambda x: x["number"]
 )
 
 
 print(
-    "Narration scenes found:",
+    "Scenes found:",
     len(scenes)
 )
 
-print()
-
 
 if not scenes:
-
     raise RuntimeError(
-        "No valid scenes with NARRATION were found."
+        "No valid scenes found."
     )
 
 
 # ============================================================
-# CHECK IMAGE FOR EVERY SCENE
+# VERIFY IMAGES
 # ============================================================
 
 print()
-print("========================================")
-print("CHECKING SCENE IMAGES")
-print("========================================")
+print("==============================================")
+print("VERIFYING SCENE IMAGES")
+print("==============================================")
 print()
 
 
@@ -320,14 +265,13 @@ for scene in scenes:
     )
 
     print(
-        f"Scene {number}:",
-        image_path
+        f"Scene {number}: {image_path}"
     )
 
     if not os.path.isfile(image_path):
 
         raise RuntimeError(
-            f"Missing scene image for Scene {number}: "
+            f"Missing image for Scene {number}: "
             f"{image_path}"
         )
 
@@ -335,9 +279,7 @@ for scene in scenes:
 
 
 print()
-print(
-    "All required scene images are present."
-)
+print("ALL SCENE IMAGES FOUND")
 print()
 
 
@@ -360,13 +302,11 @@ os.makedirs(
     exist_ok=True
 )
 
-
 if os.path.exists(SCENE_DIR):
 
     shutil.rmtree(
         SCENE_DIR
     )
-
 
 os.makedirs(
     SCENE_DIR
@@ -378,10 +318,11 @@ os.makedirs(
 # ============================================================
 
 print()
-print("========================================")
+print("==============================================")
 print("LOADING TAGALOG TTS")
-print("========================================")
+print("==============================================")
 print()
+
 
 device = (
     "cuda"
@@ -409,7 +350,7 @@ print()
 
 
 # ============================================================
-# GENERATE SCENE CLIPS
+# CREATE INDIVIDUAL SCENE CLIPS
 # ============================================================
 
 scene_clips = []
@@ -418,31 +359,33 @@ scene_clips = []
 for scene in scenes:
 
     number = scene["number"]
+
     narration = scene["narration"]
+
     image_path = scene["image"]
 
+
     print()
-    print("================================")
-    print(f"SCENE {number}")
-    print("================================")
+    print("----------------------------------------------")
+    print(f"CREATING SCENE {number}")
+    print("----------------------------------------------")
     print()
 
     print(
-        "Image:",
+        "IMAGE:",
         image_path
     )
 
-    print()
-
     print(
-        "Narration:",
+        "NARRATION:",
         narration
     )
 
     print()
 
+
     # --------------------------------------------------------
-    # GENERATE AUDIO
+    # TTS
     # --------------------------------------------------------
 
     audio_path = os.path.join(
@@ -450,15 +393,18 @@ for scene in scenes:
         f"audio_{number:02d}.wav"
     )
 
+
     inputs = tokenizer(
         narration,
         return_tensors="pt"
     )
 
+
     inputs = {
         key: value.to(device)
         for key, value in inputs.items()
     }
+
 
     with torch.no_grad():
 
@@ -466,14 +412,14 @@ for scene in scenes:
             **inputs
         )
 
-    waveform = output.waveform
 
     waveform = (
-        waveform
+        output.waveform
         .detach()
         .cpu()
         .numpy()
     )
+
 
     if waveform.ndim > 1:
 
@@ -487,65 +433,35 @@ for scene in scenes:
     )
 
 
-    # --------------------------------------------------------
-    # AUDIO DURATION
-    # --------------------------------------------------------
-
     audio_duration = get_audio_duration(
         audio_path
     )
 
-    duration = (
+
+    scene_duration = (
         audio_duration
         + END_PADDING
     )
 
 
     print(
-        f"Audio duration: {audio_duration:.2f}s"
+        f"Audio duration: "
+        f"{audio_duration:.2f}s"
     )
 
     print(
-        f"Scene duration: {duration:.2f}s"
+        f"Scene duration: "
+        f"{scene_duration:.2f}s"
     )
 
 
     # --------------------------------------------------------
-    # CREATE VIDEO CLIP
+    # SCENE VIDEO
     # --------------------------------------------------------
 
     clip_path = os.path.join(
         SCENE_DIR,
         f"scene_{number:02d}.mp4"
-    )
-
-
-    # --------------------------------------------------------
-    # CINEMATIC ZOOM
-    # --------------------------------------------------------
-
-    frames = max(
-        1,
-        int(duration * FPS)
-    )
-
-
-    zoom_expression = (
-        "min(zoom+0.0008,1.08)"
-    )
-
-
-    vf = (
-        f"scale={WIDTH}:{HEIGHT}:"
-        f"force_original_aspect_ratio=increase,"
-        f"crop={WIDTH}:{HEIGHT},"
-        f"zoompan="
-        f"z='{zoom_expression}':"
-        f"x='iw/2-(iw/zoom/2)':"
-        f"y='ih/2-(ih/zoom/2)':"
-        f"d={frames}:"
-        f"s={WIDTH}x{HEIGHT}:"
-        f"fps={FPS}"
     )
 
 
@@ -564,10 +480,16 @@ for scene in scenes:
         audio_path,
 
         "-vf",
-        vf,
+
+        (
+            f"scale={WIDTH}:{HEIGHT}:"
+            f"force_original_aspect_ratio=increase,"
+            f"crop={WIDTH}:{HEIGHT},"
+            f"format=yuv420p"
+        ),
 
         "-t",
-        f"{duration:.3f}",
+        f"{scene_duration:.3f}",
 
         "-map",
         "0:v:0",
@@ -604,9 +526,6 @@ for scene in scenes:
 
         "-shortest",
 
-        "-movflags",
-        "+faststart",
-
         clip_path
     ]
 
@@ -621,7 +540,8 @@ for scene in scenes:
     ):
 
         raise RuntimeError(
-            f"Scene clip was not created: {clip_path}"
+            f"Scene clip missing: "
+            f"{clip_path}"
         )
 
 
@@ -630,11 +550,9 @@ for scene in scenes:
     )
 
 
-    print()
     print(
-        f"Scene {number} video created."
+        f"SCENE {number} COMPLETE"
     )
-    print()
 
 
 # ============================================================
@@ -642,9 +560,9 @@ for scene in scenes:
 # ============================================================
 
 print()
-print("========================================")
+print("==============================================")
 print("VERIFYING SCENE CLIPS")
-print("========================================")
+print("==============================================")
 print()
 
 
@@ -660,9 +578,6 @@ for clip in scene_clips:
         "OK:",
         clip
     )
-
-
-print()
 
 
 # ============================================================
@@ -703,40 +618,18 @@ with open(
 
 
 print()
-print(
-    "Concat file created:"
-)
-print(
-    concat_file
-)
+print("==============================================")
+print("COMBINING SCENES")
+print("==============================================")
 print()
 
 
 # ============================================================
-# COMBINE ALL SCENES
+# FINAL CONCAT
 # ============================================================
-#
-# IMPORTANT:
-#
-# We intentionally DO NOT use:
-#
-# -c copy
-#
-# We re-encode the final video so every scene's
-# video frames are preserved correctly.
-#
-# ============================================================
-
-print()
-print("========================================")
-print("COMBINING ALL SCENES")
-print("========================================")
-print()
-
 
 run_command(
     [
-
         "ffmpeg",
         "-y",
 
@@ -785,13 +678,13 @@ run_command(
 
 
 # ============================================================
-# VERIFY FINAL VIDEO
+# FINAL VERIFICATION
 # ============================================================
 
 print()
-print("========================================")
+print("==============================================")
 print("VERIFYING FINAL VIDEO")
-print("========================================")
+print("==============================================")
 print()
 
 
@@ -806,9 +699,7 @@ if not os.path.isfile(
 
 probe = subprocess.run(
     [
-
         "ffprobe",
-
         "-v",
         "error",
 
@@ -819,7 +710,6 @@ probe = subprocess.run(
         "json",
 
         OUTPUT_VIDEO
-
     ],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
@@ -843,69 +733,51 @@ print(
 )
 
 
-# ============================================================
-# CHECK VIDEO + AUDIO
-# ============================================================
-
-try:
-
-    probe_data = json.loads(
-        probe.stdout
-    )
-
-except json.JSONDecodeError:
-
-    raise RuntimeError(
-        "Could not read FFprobe JSON."
-    )
+data = json.loads(
+    probe.stdout
+)
 
 
-streams = probe_data.get(
+streams = data.get(
     "streams",
     []
 )
 
 
 has_video = any(
-    stream.get("codec_type") == "video"
-    for stream in streams
+    s.get("codec_type") == "video"
+    for s in streams
 )
 
 
 has_audio = any(
-    stream.get("codec_type") == "audio"
-    for stream in streams
+    s.get("codec_type") == "audio"
+    for s in streams
 )
 
 
 if not has_video:
 
     raise RuntimeError(
-        "Final video does not contain a video stream."
+        "Final video has no video stream."
     )
 
 
 if not has_audio:
 
     raise RuntimeError(
-        "Final video does not contain an audio stream."
+        "Final video has no audio stream."
     )
 
 
 print()
-print(
-    "Video stream: OK"
-)
-
-print(
-    "Audio stream: OK"
-)
-
+print("VIDEO STREAM: OK")
+print("AUDIO STREAM: OK")
 print()
 
 
 # ============================================================
-# FIRESTORE UPDATE
+# UPDATE FIRESTORE
 # ============================================================
 
 episode_doc.reference.update(
@@ -916,14 +788,10 @@ episode_doc.reference.update(
 )
 
 
-# ============================================================
-# COMPLETE
-# ============================================================
-
 print()
-print("========================================")
-print("EASYDUBBER TAGALOG VIDEO COMPLETE")
-print("========================================")
+print("==============================================")
+print("EASYDUBBER VIDEO COMPLETE")
+print("==============================================")
 print()
 
 print(
@@ -947,7 +815,5 @@ print(
 )
 
 print()
-print(
-    "Video + Audio successfully combined."
-)
+print("ALL SCENES RENDERED SUCCESSFULLY")
 print()
