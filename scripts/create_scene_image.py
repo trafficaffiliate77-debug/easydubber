@@ -1,56 +1,34 @@
 import os
-import base64
 import requests
+from urllib.parse import quote
 
 WIDTH = 1080
 HEIGHT = 1920
 
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-
 STYLE = """
-Ultra cinematic anime, detailed characters,
-consistent protagonist, dramatic lighting,
-vertical 9:16, high quality, no text,
-no watermark, expressive faces.
+cinematic anime, futuristic technology, consistent characters,
+dramatic lighting, ultra detailed, vertical portrait, 9:16,
+high quality, no text, no watermark
 """
 
 def create_scene_image(scene_number, scene_text):
-
     os.makedirs("output/images", exist_ok=True)
 
-    prompt = f"""
-{STYLE}
+    prompt = f"{STYLE}. {scene_text}"
 
-Scene {scene_number}
-
-{scene_text}
-
-Camera: cinematic composition, vertical portrait.
-"""
-
-    response = requests.post(
-        "https://api.openai.com/v1/images/generations",
-        headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "gpt-image-1",
-            "size": "1024x1792",
-            "prompt": prompt,
-        },
-        timeout=300,
+    url = (
+        "https://image.pollinations.ai/prompt/"
+        + quote(prompt)
+        + "?width=1080&height=1920&model=flux"
     )
-
-    response.raise_for_status()
-
-    image_b64 = response.json()["data"][0]["b64_json"]
 
     output = f"output/images/scene_{scene_number:02d}.png"
 
+    r = requests.get(url, timeout=300)
+    r.raise_for_status()
+
     with open(output, "wb") as f:
-        f.write(base64.b64decode(image_b64))
+        f.write(r.content)
 
     print("Created:", output)
-
     return output
