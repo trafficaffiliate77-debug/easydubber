@@ -225,12 +225,12 @@ for index in range(1, len(narrations) + 1):
         f"scene_{index:02d}.png"
     )
 
-    if not os.path.exists(image_path):
-        raise RuntimeError(
-            f"Missing scene image: {image_path}"
+    if os.path.exists(image_path):
+        visuals.append(image_path)
+    else:
+        print(
+            f"Warning: Missing image for scene {index}"
         )
-
-    visuals.append(image_path)
 
 
 print("Scene images found:", len(visuals))
