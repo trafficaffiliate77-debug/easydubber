@@ -1,119 +1,318 @@
 import os
-import json
+import re
 import firebase_admin
-
 from firebase_admin import credentials, firestore
+
 from create_scene_image import create_scene_image
 
 
-# ==========================================
-# Firebase
-# ==========================================
-
-service_account = json.loads(
-    os.environ["FIREBASE_SERVICE_ACCOUNT"]
-)
-
-cred = credentials.Certificate(service_account)
-
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
+# ============================================================
+# EASYDUBBER — CREATE ALL SCENE IMAGES
+# ============================================================
+# Creates one image for EVERY scene found in the story.
+# No hard 10-scene limit.
+# ============================================================
 
 
-# ==========================================
-# Find generated episode
-# ==========================================
+def initialize_firebase():
 
-episodes = (
-    db.collection("episodes")
-    .where("status", "==", "generated")
-    .limit(1)
-    .stream()
-)
+    service_account = os.environ.get(
+        "FIREBASE_SERVICE_ACCOUNT"
+    )
 
-episode_doc = None
-episode_data = None
+    if not service_account:
+        raise RuntimeError(
+            "FIREBASE_SERVICE_ACCOUNT environment variable is missing."
+        )
 
-for doc in episodes:
-    episode_doc = doc
-    episode_data = doc.to_dict()
-    break
+    import json
 
+    service_account_info = json.loads(service_account)
 
-if episode_doc is None:
-    print("No generated episode found.")
-    exit(0)
+    cred = credentials.Certificate(
+        service_account_info
+    )
 
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
 
-story = episode_data.get(
-    "story",
-    ""
-)
+    return firestore.client()
 
 
-# ==========================================
-# Extract scenes
-# ==========================================
+def get_generated_episode(db):
 
-scenes = []
+    episodes_ref = db.collection("episodes")
 
-for block in story.split("SCENE ")[1:]:
+    docs = (
+        episodes_ref
+        .where("status", "==", "generated")
+        .limit(1)
+        .stream()
+    )
 
-    lines = block.strip().splitlines()
+    for doc in docs:
+        return doc
 
-    if not lines:
-        continue
+    return None
 
-    number_text = lines[0].split(":")[0].strip()
 
-    try:
-        number = int(number_text)
-    except ValueError:
-        continue
+def parse_scenes(story):
 
-    visual = ""
+    lines = story.splitlines()
+
+    scenes = []
+
+    current_number = None
+    current_visual = ""
 
     for line in lines:
 
-        if line.startswith("VISUAL:"):
-            visual = line.replace(
-                "VISUAL:",
-                "",
-                1
-            ).strip()
+        line = line.strip()
 
-    if visual:
-        scenes.append(
-            (number, visual)
+        # ----------------------------------------------------
+        # Detect scene number
+        # Supports:
+        # SCENE 1
+        # SCENE 2
+        # SCENE 11
+        # ----------------------------------------------------
+
+        scene_match = re.match(
+            r"^SCENE\s+(\d+)",
+            line,
+            re.IGNORECASE
         )
 
+        if scene_match:
 
-scenes = scenes[:10]
+            # Save previous scene first
+            if current_number is not None and current_visual:
 
-print(
-    "Visual scenes found:",
-    len(scenes)
-)
+                scenes.append(
+                    (
+                        current_number,
+                        current_visual
+                    )
+                )
+
+            current_number = int(
+                scene_match.group(1)
+            )
+
+            current_visual = ""
+
+            continue
+
+        # ----------------------------------------------------
+        # Get VISUAL line
+        # ----------------------------------------------------
+
+        if line.upper().startswith("VISUAL:"):
+
+            visual = line.split(
+                ":",
+                1
+            )[1].strip()
+
+            current_visual = visual
+
+    # --------------------------------------------------------
+    # Save final scene
+    # --------------------------------------------------------
+
+    if current_number is not None and current_visual:
+
+        scenes.append(
+            (
+                current_number,
+                current_visual
+            )
+        )
+
+    return scenes
 
 
-# ==========================================
-# Generate images
-# ==========================================
-
-for number, visual in scenes:
+def main():
 
     print()
-    print("Creating visual for scene", number)
+    print("==============================================")
+    print("EASYDUBBER — CREATE ALL SCENE IMAGES")
+    print("==============================================")
+    print()
 
-    create_scene_image(
-        number,
-        visual
+    db = initialize_firebase()
+
+    episode_doc = get_generated_episode(db)
+
+    if not episode_doc:
+
+        print("No generated episode found.")
+        print()
+
+        return
+
+    episode = episode_doc.to_dict()
+
+    title = episode.get(
+        "title",
+        "Untitled Episode"
     )
 
+    story = episode.get(
+        "story",
+        ""
+    )
 
-print()
-print("================================")
-print("VISUAL GENERATION COMPLETE")
-print("================================")
+    print("Episode:", title)
+    print()
+
+    if not story.strip():
+
+        raise RuntimeError(
+            "Episode has no story."
+        )
+
+    # --------------------------------------------------------
+    # Parse ALL scenes
+    # --------------------------------------------------------
+
+    scenes = parse_scenes(story)
+
+    print(
+        "Scenes found:",
+        len(scenes)
+    )
+    print()
+
+    if not scenes:
+
+        raise RuntimeError(
+            "No scenes with VISUAL lines were found."
+        )
+
+    # --------------------------------------------------------
+    # Create output directory
+    # --------------------------------------------------------
+
+    output_dir = "output/images"
+
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
+
+    # --------------------------------------------------------
+    # Create EVERY scene image
+    # --------------------------------------------------------
+
+    for number, visual in scenes:
+
+        print()
+        print("----------------------------------------------")
+        print(
+            f"Creating Scene {number}"
+        )
+        print("----------------------------------------------")
+        print()
+
+        if not visual:
+
+            print(
+                f"WARNING: Scene {number} has no visual."
+            )
+
+            continue
+
+        print("Visual:")
+        print(visual)
+        print()
+
+        try:
+
+            create_scene_image(
+                number,
+                visual
+            )
+
+            print()
+            print(
+                f"Scene {number} image created successfully."
+            )
+
+        except Exception as e:
+
+            print()
+            print(
+                f"ERROR creating Scene {number}:"
+            )
+            print(e)
+            print()
+
+            raise
+
+    # --------------------------------------------------------
+    # Verify all images exist
+    # --------------------------------------------------------
+
+    print()
+    print("==============================================")
+    print("VERIFYING SCENE IMAGES")
+    print("==============================================")
+    print()
+
+    missing = []
+
+    for number, visual in scenes:
+
+        image_path = os.path.join(
+            output_dir,
+            f"scene_{number:02d}.png"
+        )
+
+        if os.path.exists(image_path):
+
+            size = os.path.getsize(
+                image_path
+            )
+
+            print(
+                f"Scene {number}: OK "
+                f"({size:,} bytes)"
+            )
+
+        else:
+
+            print(
+                f"Scene {number}: MISSING"
+            )
+
+            missing.append(
+                number
+            )
+
+    print()
+
+    if missing:
+
+        raise RuntimeError(
+            "Missing scene images: "
+            + ", ".join(
+                str(x)
+                for x in missing
+            )
+        )
+
+    print("==============================================")
+    print("ALL SCENE IMAGES CREATED")
+    print("==============================================")
+    print()
+
+    print(
+        f"Total scene images: {len(scenes)}"
+    )
+
+    print()
+
+
+if __name__ == "__main__":
+    main()
