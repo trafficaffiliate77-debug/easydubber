@@ -48,3 +48,9 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python scripts/upload_youtube.py
+
+      - name: Upload Scene Images
+        uses: actions/upload-artifact@v4
+        with:
+          name: easydubber-scene-images
+          path: output/images/*.png
